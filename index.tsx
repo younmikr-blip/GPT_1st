@@ -55,18 +55,32 @@ interface Scale {
 }
 
 const SCALES: Scale[] = [
+  // 기본 및 메이저/마이너
   { name: 'Major', intervals: [0, 2, 4, 5, 7, 9, 11] },
   { name: 'Natural Minor', intervals: [0, 2, 3, 5, 7, 8, 10] },
   { name: 'Harmonic Minor', intervals: [0, 2, 3, 5, 7, 8, 11] },
   { name: 'Melodic Minor', intervals: [0, 2, 3, 5, 7, 9, 11] },
+  // 펜타토닉 & 블루스
   { name: 'Pentatonic Major', intervals: [0, 2, 4, 7, 9] },
   { name: 'Pentatonic Minor', intervals: [0, 3, 5, 7, 10] },
   { name: 'Blues', intervals: [0, 3, 5, 6, 7, 10] },
+  // 7가지 모드
+  { name: 'Ionian', intervals: [0, 2, 4, 5, 7, 9, 11] },
   { name: 'Dorian', intervals: [0, 2, 3, 5, 7, 9, 10] },
   { name: 'Phrygian', intervals: [0, 1, 3, 5, 7, 8, 10] },
   { name: 'Lydian', intervals: [0, 2, 4, 6, 7, 9, 11] },
   { name: 'Mixolydian', intervals: [0, 2, 4, 5, 7, 9, 10] },
+  { name: 'Aeolian', intervals: [0, 2, 3, 5, 7, 8, 10] },
   { name: 'Locrian', intervals: [0, 1, 3, 5, 6, 8, 10] },
+  // 확장 및 엑조틱 스케일
+  { name: 'Whole Tone', intervals: [0, 2, 4, 6, 8, 10] },
+  { name: 'Diminished (H-W)', intervals: [0, 1, 3, 4, 6, 7, 9, 10] },
+  { name: 'Diminished (W-H)', intervals: [0, 2, 3, 5, 6, 8, 9, 11] },
+  { name: 'Altered', intervals: [0, 1, 3, 4, 6, 8, 10] },
+  { name: 'Phrygian Dominant', intervals: [0, 1, 4, 5, 7, 8, 10] },
+  { name: 'Lydian Dominant', intervals: [0, 2, 4, 6, 7, 9, 10] },
+  { name: 'Hungarian Minor', intervals: [0, 2, 3, 6, 7, 8, 11] },
+  { name: 'Spanish Gypsy', intervals: [0, 1, 4, 5, 7, 8, 10] },
 ];
 
 const INTERVAL_COLORS: Record<number, string> = {
@@ -86,7 +100,7 @@ interface Track {
 
 type Notation = 'English' | 'Degree' | 'Sharp';
 type HarmonyMode = 'Individual' | 'Chord' | 'Scale';
-type DrumMode = 'None' | 'Rock' | 'Blues' | 'Jazz' | 'Funk' | 'Reggae' | 'Swing' | 'Metal';
+type DrumMode = 'None' | 'Rock' | 'Blues' | 'Jazz' | 'Funk' | 'Reggae' | 'Swing' | 'Metal' | 'Bossa' | 'Shuffle' | 'Country' | 'Punk';
 
 @customElement('guitar-scale-app')
 export class GuitarScaleApp extends LitElement {
@@ -451,6 +465,18 @@ export class GuitarScaleApp extends LitElement {
     noise.start(time); noise.stop(time + 0.05);
   }
 
+  private playRimshot(time: number, vol = 0.4) {
+    if (!this.audioCtx) return;
+    const osc = this.audioCtx.createOscillator();
+    const gain = this.audioCtx.createGain();
+    osc.connect(gain); gain.connect(this.audioCtx.destination);
+    osc.frequency.setValueAtTime(800, time);
+    osc.frequency.exponentialRampToValueAtTime(400, time + 0.05);
+    gain.gain.setValueAtTime(vol, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+    osc.start(time); osc.stop(time + 0.05);
+  }
+
   private async loadAllTracks() {
     try {
       const storedTracks = await getAllTracksFromDB();
@@ -583,7 +609,6 @@ export class GuitarScaleApp extends LitElement {
   private updateRhythmLocally() {
     const total = this.getTotalSteps();
     const newPattern = Array(total).fill(0);
-    const den = this.getDenominator();
     const steps = this.getStepsPerBeat();
     
     for (let i = 0; i < total; i++) {
@@ -649,41 +674,72 @@ export class GuitarScaleApp extends LitElement {
     const den = this.getDenominator();
     const steps = this.getStepsPerBeat();
 
-    // High Hat - Steady pulse
-    if (pos % 2 === 0) this.playHiHat(time, 0.1);
-    if (complexity > 0.5 && pos % 2 !== 0 && Math.random() < complexity * 0.4) this.playHiHat(time, 0.05);
+    // High Hat - Steady pulse (Improved sounds per genre)
+    let hatVol = 0.12;
+    if (this.drumMode === 'Jazz' || this.drumMode === 'Swing') {
+      // Swing ride pattern (1, 2&, 3, 4&)
+      if (pos % 4 === 0 || pos % 4 === 3) this.playHiHat(time, 0.15);
+    } else if (this.drumMode === 'Shuffle' || this.drumMode === 'Blues') {
+      // Triplet shuffle (1, (2), 3)
+      if (pos % 3 === 0 || pos % 3 === 2) this.playHiHat(time, 0.12);
+    } else {
+      if (pos % 2 === 0) this.playHiHat(time, hatVol);
+      if (complexity > 0.6 && pos % 2 !== 0 && Math.random() < complexity * 0.4) this.playHiHat(time, 0.04);
+    }
 
     switch (this.drumMode) {
       case 'Rock':
-        if (pos === 0 || (complexity > 0.4 && pos === Math.floor(total * 0.6))) this.playKick(time);
-        if (pos === Math.floor(total / 2)) this.playSnare(time);
-        if (complexity > 0.7 && pos === total - 1) this.playSnare(time, 0.2);
+        if (pos === 0 || (complexity > 0.4 && pos === Math.floor(total * 0.625))) this.playKick(time);
+        if (pos === Math.floor(total / 2)) this.playSnare(time, 0.7);
+        if (complexity > 0.8 && pos === total - 2) this.playSnare(time, 0.25);
         break;
       case 'Funk':
-        if (pos === 0 || pos === 3 || pos === 10) this.playKick(time);
-        if (pos === steps || pos === steps * 3 || (complexity > 0.6 && pos === 15)) this.playSnare(time, 0.4);
+        if (pos === 0 || pos === 6 || (complexity > 0.5 && pos === 10)) this.playKick(time);
+        if (pos === steps || pos === steps * 3) this.playSnare(time, 0.5);
+        if (complexity > 0.3 && (pos % 4 !== 0) && Math.random() < complexity * 0.6) this.playSnare(time, 0.1); // Ghost notes
         break;
       case 'Jazz':
-        if (pos === 0 || (complexity > 0.6 && pos === Math.floor(total * 0.5))) this.playKick(time, 0.5);
-        if (pos % 4 === 3) this.playHiHat(time, 0.3); // Swing ride feel
-        if (complexity > 0.5 && Math.random() < 0.2) this.playSnare(time, 0.1);
+        if (pos === 0 || (complexity > 0.7 && pos === 8)) this.playKick(time, 0.4);
+        if (pos % 4 === 0) this.playHiHat(time, 0.2); // Pedal hat
+        if (complexity > 0.5 && Math.random() < 0.15) this.playSnare(time, 0.1);
         break;
       case 'Blues':
-        if (pos % 6 === 0) this.playKick(time);
-        if (pos === Math.floor(total / 2)) this.playSnare(time);
-        if (pos % 6 === 4) this.playHiHat(time, 0.15); // Shuffle feel
+        if (pos % 6 === 0) this.playKick(time, 0.8);
+        if (pos === 6) this.playSnare(time, 0.6);
         break;
       case 'Reggae':
-        if (pos === Math.floor(total / 2)) { this.playKick(time); this.playSnare(time, 0.6); }
-        if (pos === 0 && complexity > 0.8) this.playKick(time, 0.2);
+        // One Drop: 3rd beat has kick + snare
+        if (pos === Math.floor(total / 2)) { this.playKick(time); this.playSnare(time, 0.8); }
+        if (complexity > 0.7 && pos === 0) this.playRimshot(time, 0.3);
         break;
       case 'Metal':
-        if (pos % 2 === 0) this.playKick(time, 1.0); // Double kick
-        if (pos === steps || pos === steps * 3) this.playSnare(time, 0.8);
+        if (pos % 2 === 0) this.playKick(time, 1.1); // Constant double kick
+        if (pos === steps || pos === steps * 3) this.playSnare(time, 0.9);
         break;
       case 'Swing':
-        if (pos % 3 === 0) this.playKick(time, 0.6);
-        if (pos % 3 === 2) this.playHiHat(time, 0.2);
+        if (pos % 4 === 0) this.playKick(time, 0.5);
+        if (pos % 4 === 2) this.playHiHat(time, 0.25);
+        break;
+      case 'Bossa':
+        // 킥 클라베: 1, (2), 3, (4) &
+        if (pos === 0 || pos === 6 || pos === 10 || pos === 14) this.playKick(time, 0.7);
+        // 스틱 패턴: 0, 3, 6, 10, 13
+        const stick = [0, 3, 6, 10, 13];
+        if (stick.includes(pos)) this.playRimshot(time, 0.5);
+        break;
+      case 'Shuffle':
+        if (pos % 6 === 0) this.playKick(time);
+        if (pos === 6) this.playSnare(time, 0.6);
+        break;
+      case 'Country':
+        // Boom-Chick: 킥-스네어-킥-스네어
+        if (pos % 8 === 0 || pos % 8 === 4) this.playKick(time, 0.9);
+        if (pos % 8 === 2 || pos % 8 === 6) this.playSnare(time, 0.5);
+        break;
+      case 'Punk':
+        // Fast 2-beat
+        if (pos % 4 === 0 || pos % 4 === 1) this.playKick(time, 1.0);
+        if (pos % 4 === 2) this.playSnare(time, 0.8);
         break;
     }
   }
@@ -781,7 +837,7 @@ export class GuitarScaleApp extends LitElement {
               <div class="slider-item"><div class="slider-header"><span>난이도</span><span>${this.difficulty}</span></div><input type="range" min="1" max="10" .value=${this.difficulty} @input=${(e:any)=>{this.difficulty=parseInt(e.target.value);this.updateRhythmLocally();}}></div>
               <div class="slider-item"><div class="slider-header"><span>드럼 복잡도</span><span>${this.drumComplexity}</span></div><input type="range" min="1" max="10" .value=${this.drumComplexity} @input=${(e:any)=>this.drumComplexity=parseInt(e.target.value)}></div>
             </div>
-            <div style="margin-top:16px;"><div class="slider-header"><span>드럼 장르</span></div><div class="btn-group">${['None', 'Rock', 'Jazz', 'Funk', 'Swing', 'Reggae', 'Metal'].map(m => html`<button class="btn-chip ${this.drumMode === m ? 'active' : ''}" @click=${()=>this.drumMode=m as any}>${m}</button>`)}</div></div>
+            <div style="margin-top:16px;"><div class="slider-header"><span>드럼 장르</span></div><div class="btn-group">${['None', 'Rock', 'Jazz', 'Funk', 'Swing', 'Reggae', 'Metal', 'Bossa', 'Shuffle', 'Country', 'Punk'].map(m => html`<button class="btn-chip ${this.drumMode === m ? 'active' : ''}" @click=${()=>this.drumMode=m as any}>${m}</button>`)}</div></div>
             <div class="rhythm-grid">
               ${Array.from({length: this.getNumerator()}, (_, bIdx) => {
                 const step = this.currentBeat % total;
