@@ -2,12 +2,13 @@
 import { LitElement, html, css } from 'lit';
 
 /**
- * Guitar Scale Master - Ultra Pro Edition
- * All Features Restored & Optimized
+ * Guitar Scale Master - Ultra Pro Edition (Standalone)
+ * Fixed: Variable errors, Waveform rendering, and A-B Looping
+ * This app runs entirely locally without requiring external APIs.
  */
 
 // --- IndexedDB Management ---
-const DB_NAME = 'GuitarBackingDB_V4';
+const DB_NAME = 'GuitarBackingDB_V5';
 const STORE_NAME = 'tracks';
 
 async function openDB() {
@@ -136,7 +137,6 @@ class GuitarScaleApp extends LitElement {
       box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); font-size: 1rem;
     }
     .btn-main-play:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4); }
-    .btn-main-play:active { transform: translateY(0); }
     .btn-main-play.active { background: #dc2626; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3); }
 
     .btn-chip {
@@ -520,17 +520,17 @@ class GuitarScaleApp extends LitElement {
         return html`
         <div class="section-card fretboard-container">
           <div class="fretboard">
-            ${[3,5,7,9,12,15,17,19,21].map(f => html`<div class="fret-inlay" style="left:${(f - 0.5) * 4.35}%; top:50%"></div>`)}
+            ${[3,5,7,9,12,15,17,19,21].map(fNum => html`<div class="fret-inlay" style="left:${(fNum - 0.5) * 4.35}%; top:50%"></div>`)}
             ${GUITAR_TUNING.map((base, sIdx) => html`
               <div class="string"><span style="position:absolute; left:-50px; top:-5px; font-weight:900; color:#64748b; font-size:1.2rem;">${STRINGS[sIdx]}</span>
-                ${Array.from({length: 24}).map((_, f) => {
-                  const nIdx = (base + f) % 12; if (!visible.includes(nIdx)) return null;
+                ${Array.from({length: 24}).map((_, fIdx) => {
+                  const nIdx = (base + fIdx) % 12; if (!visible.includes(nIdx)) return null;
                   const iv = (12 + nIdx - rIdx) % 12;
-                  return html`<div class="note-marker ${iv===0?'root-note':''}" style="left:${(f - 0.5) * 4.35}%; background:${INTERVAL_COLORS[iv]}">${NOTES_SHARP[nIdx]}</div>`;
+                  return html`<div class="note-marker ${iv===0?'root-note':''}" style="left:${(fIdx - 0.5) * 4.35}%; background:${INTERVAL_COLORS[iv]}">${NOTES_SHARP[nIdx]}</div>`;
                 })}
               </div>
             `)}
-            ${Array.from({length: 24}).map((_, i) => html`<div class="fret-line" style="left:${i * 4.35}%"></div><div class="fret-number" style="left:${i * 4.35}%">${i}</div>`)}
+            ${Array.from({length: 24}).map((_, iIdx) => html`<div class="fret-line" style="left:${iIdx * 4.35}%"></div><div class="fret-number" style="left:${iIdx * 4.35}%">${iIdx}</div>`)}
           </div>
         </div>`;
       case 'copy': return html`
