@@ -1,0 +1,7 @@
+{
+  "name": "Copy of Guitar Scale Master",
+  "description": "AI 기반 리듬 생성 및 인터랙티브 일렉기타 스케일 연습 도구",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
