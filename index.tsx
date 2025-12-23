@@ -1,7 +1,6 @@
 
 import { css, html, LitElement, PropertyValues } from 'lit';
 import { customElement, state, query } from 'lit/decorators.js';
-import { classMap } from 'lit/directives/class-map.js';
 
 // --- IndexedDB 관리 ---
 const DB_NAME = 'GuitarBackingDB';
@@ -47,7 +46,7 @@ async function getAllTracksFromDB(): Promise<any[]> {
 // --- 음악 이론 데이터 ---
 const NOTES_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const NOTES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
-const GUITAR_TUNING = [4, 11, 7, 2, 9, 4]; // E4, B3, G3, D3, A2, E2
+const GUITAR_TUNING = [4, 11, 7, 2, 9, 4]; 
 const STRINGS = ['E', 'B', 'G', 'D', 'A', 'E'];
 
 interface Scale {
@@ -329,7 +328,7 @@ export class GuitarScaleApp extends LitElement {
   @state() drumComplexity: number = 5;
   @state() isPlaying: boolean = false;
   @state() currentBeat: number = 0; 
-  @state() rhythmPattern: number[] = Array(32).fill(0).map((_, i) => i % 4 === 0 ? 1 : 0); 
+  @state() rhythmPattern: number[] = Array(32).fill(0);
   @state() metronomeEnabled: boolean = true;
   @state() drumMode: DrumMode = 'Rock';
   @state() selectedBackingKey: string = 'C';
@@ -571,29 +570,27 @@ export class GuitarScaleApp extends LitElement {
   private handleCopyMachineVolume(e: any) { this.copyMachineVolume = parseFloat(e.target.value); this.copyMachinePlayer.volume = this.copyMachineVolume; }
   private formatTime(seconds: number) { if (isNaN(seconds)) return "0:00"; const min = Math.floor(seconds / 60); const sec = Math.floor(seconds % 60); return `${min}:${sec.toString().padStart(2, '0')}`; }
   
-  // 박자 계산 개선
   private getNumerator(): number { const [num] = this.timeSignature.split('/').map(Number); return num; }
   private getDenominator(): number { const [_, den] = this.timeSignature.split('/').map(Number); return den; }
-  private getStepsPerBeat(): number { return 4; } // 1박자당 4분할(16분음표 기준)
-  private getTotalSteps(): number {
-    const num = this.getNumerator();
+  private getStepsPerBeat(): number { 
     const den = this.getDenominator();
-    if (den === 8) return num * 2; // 6/8 -> 12 steps (16분음표 기준)
-    return num * 4; // 4/4 -> 16 steps
+    return den === 8 ? 2 : 4; 
+  }
+  private getTotalSteps(): number {
+    return this.getNumerator() * this.getStepsPerBeat();
   }
 
   private updateRhythmLocally() {
     const total = this.getTotalSteps();
     const newPattern = Array(total).fill(0);
     const den = this.getDenominator();
+    const steps = this.getStepsPerBeat();
     
     for (let i = 0; i < total; i++) {
-      // 정박 강조
-      const isOnBeat = den === 8 ? (i % 6 === 0) : (i % 4 === 0);
+      const isOnBeat = (i % steps === 0);
       if (isOnBeat) {
         newPattern[i] = 1;
       } else {
-        // 당김음 및 난이도 기반 생성
         const syncChance = this.syncopation / 20;
         const diffChance = this.difficulty / 20;
         if (Math.random() < syncChance && Math.random() < diffChance) {
@@ -607,7 +604,11 @@ export class GuitarScaleApp extends LitElement {
   private async togglePlayback() {
     const ctx = await this.ensureAudioCtx();
     this.isPlaying = !this.isPlaying;
-    if (this.isPlaying) { this.currentBeat = 0; this.nextNoteTime = ctx.currentTime; this.scheduler(); }
+    if (this.isPlaying) { 
+      this.currentBeat = 0; 
+      this.nextNoteTime = ctx.currentTime; 
+      this.scheduler(); 
+    }
     else { clearTimeout(this.timerID); }
   }
 
@@ -624,10 +625,8 @@ export class GuitarScaleApp extends LitElement {
 
   private scheduleNote(step: number, time: number) {
     if (!this.audioCtx) return;
-    const total = this.getTotalSteps();
-    const pos = step % total;
+    const pos = step % this.getTotalSteps();
     
-    // 메트로놈
     if (this.metronomeEnabled && this.rhythmPattern[pos]) {
       const isDown = pos === 0;
       const osc = this.audioCtx.createOscillator();
@@ -639,7 +638,6 @@ export class GuitarScaleApp extends LitElement {
       osc.start(time); osc.stop(time + 0.05);
     }
 
-    // 드럼 장르별 패턴
     if (this.drumMode !== 'None') {
       this.scheduleDrumPattern(pos, time);
     }
@@ -649,42 +647,43 @@ export class GuitarScaleApp extends LitElement {
     const complexity = this.drumComplexity / 10;
     const total = this.getTotalSteps();
     const den = this.getDenominator();
+    const steps = this.getStepsPerBeat();
 
-    // 공통 하이햇 (박자감 유지)
-    if (den === 8) {
-      if (pos % 2 === 0) this.playHiHat(time, 0.1);
-    } else {
-      if (pos % 2 === 0) this.playHiHat(time, 0.1);
-      if (complexity > 0.6 && pos % 2 !== 0 && Math.random() < complexity * 0.3) this.playHiHat(time, 0.05);
-    }
+    // High Hat - Steady pulse
+    if (pos % 2 === 0) this.playHiHat(time, 0.1);
+    if (complexity > 0.5 && pos % 2 !== 0 && Math.random() < complexity * 0.4) this.playHiHat(time, 0.05);
 
     switch (this.drumMode) {
       case 'Rock':
-        if (pos === 0 || (complexity > 0.5 && pos === 10)) this.playKick(time);
-        if (pos === total / 2 || (complexity > 0.7 && pos === total - 2)) this.playSnare(time);
+        if (pos === 0 || (complexity > 0.4 && pos === Math.floor(total * 0.6))) this.playKick(time);
+        if (pos === Math.floor(total / 2)) this.playSnare(time);
+        if (complexity > 0.7 && pos === total - 1) this.playSnare(time, 0.2);
         break;
       case 'Funk':
-        if (pos === 0 || pos === 6 || (complexity > 0.4 && pos === 10)) this.playKick(time);
-        if (pos === 4 || pos === 12 || (complexity > 0.6 && pos === 15)) this.playSnare(time, 0.4);
+        if (pos === 0 || pos === 3 || pos === 10) this.playKick(time);
+        if (pos === steps || pos === steps * 3 || (complexity > 0.6 && pos === 15)) this.playSnare(time, 0.4);
         break;
       case 'Jazz':
-        // Swing feel (1, 3, 4...)
-        if (pos === 0 || (complexity > 0.5 && pos === 8)) this.playKick(time, 0.6);
-        if (pos === 4 || pos === 12) this.playHiHat(time, 0.3); // Pedal Hihat
-        if (complexity > 0.7 && Math.random() < 0.2) this.playSnare(time, 0.2); // Ghost notes
+        if (pos === 0 || (complexity > 0.6 && pos === Math.floor(total * 0.5))) this.playKick(time, 0.5);
+        if (pos % 4 === 3) this.playHiHat(time, 0.3); // Swing ride feel
+        if (complexity > 0.5 && Math.random() < 0.2) this.playSnare(time, 0.1);
         break;
       case 'Blues':
         if (pos % 6 === 0) this.playKick(time);
-        if (pos === 6) this.playSnare(time);
+        if (pos === Math.floor(total / 2)) this.playSnare(time);
+        if (pos % 6 === 4) this.playHiHat(time, 0.15); // Shuffle feel
         break;
       case 'Reggae':
-        // One Drop: Kick/Snare on beat 3
-        if (pos === total / 2) { this.playKick(time); this.playSnare(time); }
-        if (pos === 0 && complexity > 0.8) this.playKick(time, 0.3);
+        if (pos === Math.floor(total / 2)) { this.playKick(time); this.playSnare(time, 0.6); }
+        if (pos === 0 && complexity > 0.8) this.playKick(time, 0.2);
         break;
       case 'Metal':
-        if (pos % 2 === 0) this.playKick(time, 1.0); // Double Bass
-        if (pos === 4 || pos === 12) this.playSnare(time, 0.8);
+        if (pos % 2 === 0) this.playKick(time, 1.0); // Double kick
+        if (pos === steps || pos === steps * 3) this.playSnare(time, 0.8);
+        break;
+      case 'Swing':
+        if (pos % 3 === 0) this.playKick(time, 0.6);
+        if (pos % 3 === 2) this.playHiHat(time, 0.2);
         break;
     }
   }
@@ -755,7 +754,7 @@ export class GuitarScaleApp extends LitElement {
     switch (key) {
       case 'rhythm_station':
         const total = this.getTotalSteps();
-        const stepsPerBeat = this.getDenominator() === 8 ? 2 : 4;
+        const stepsPerBeat = this.getStepsPerBeat();
         return html`
           <div class="section-card">
             <div class="section-header-row"><span class="section-title">Rhythm Station</span>
